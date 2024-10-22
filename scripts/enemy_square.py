@@ -14,11 +14,17 @@ class EnemySquare:
         self.damage_cooldown = 0  # Cooldown timer to control damage frequency
         self.damage_interval = damage_interval  # Number of frames between damage ticks
 
+        # Load hit sound
+        self.hit_sound = pygame.mixer.Sound('assets/sound/Hitmark.mp3')
+
+        # Set volume to 50% (can adjust as needed)
+        self.hit_sound.set_volume(0.5)  # Set volume to 50%
 
     def take_damage(self, damage):
         # Only deal damage if the cooldown has expired
         if self.damage_cooldown <= 0:
             self.health -= damage
+            print(f"Enemy took {damage} damage! Current health: {self.health}")  # Debugging print
             # Create a damage text above the enemy square when it takes damage
             damage_text = DamageText(self.rect.centerx, self.rect.top - 10, damage)
             self.damage_texts.append(damage_text)
@@ -26,10 +32,6 @@ class EnemySquare:
             # Reset the damage cooldown
             self.damage_cooldown = self.damage_interval
 
-        if self.health <= 0:
-            return True  # Enemy is dead
-        return False
-    
     def update(self):
         # Decrease the damage cooldown timer
         if self.damage_cooldown > 0:
@@ -75,3 +77,5 @@ class EnemySquare:
         pygame.draw.rect(screen, (255, 0, 0), pygame.Rect(screen_rect.left, screen_rect.bottom + 2, screen_rect.width, health_bar_height))  # Red background
         # Draw the current health (green bar)
         pygame.draw.rect(screen, (0, 255, 0), health_bar_rect)  # Green health
+        
+        

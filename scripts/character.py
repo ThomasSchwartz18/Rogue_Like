@@ -10,10 +10,14 @@ class Character:
         self.outline_thickness = 3  # Thickness for the outline
         self.movement = Movement(self.rect, map_width, map_height)  # Pass map dimensions to Movement
 
+        self.speed = 5  # Movement speed (upgradable)
+        self.damage_per_tick = 25  # Laser damage (upgradable)
+        self.dash_distance = 100  # Dash distance (upgradable)
+        
         # Character's health
         self.health = 100
         self.max_health = 100
-
+        
         # Stamina attributes
         self.max_stamina = 3  # Max stamina sections (3)
         self.stamina = self.max_stamina  # Current stamina
@@ -21,7 +25,24 @@ class Character:
         self.stamina_recharge_timer = 0  # Timer to track recharge
 
         # Damage cooldown
+        self.laser_active = False  # Whether the laser is being fired
+        self.laser_cooldown = 0  # Cooldown for laser damage
         self.damage_cooldown = 0  # Cooldown timer for taking damage
+
+    def upgrade_speed(self, amount):
+        """Upgrade character's movement speed."""
+        self.speed += amount
+        print(f"Speed upgraded! New speed: {self.speed}")
+
+    def upgrade_damage(self, amount):
+        """Upgrade character's damage per tick."""
+        self.damage_per_tick += amount
+        print(f"Damage upgraded! New damage: {self.damage_per_tick}")
+
+    def upgrade_dash_distance(self, amount):
+        """Upgrade character's dash distance."""
+        self.dash_distance += amount
+        print(f"Dash distance upgraded! New dash distance: {self.dash_distance}")
 
     def update(self):
         self.movement.handle_keys(self)  # Pass the character instance to handle_keys()
@@ -70,9 +91,23 @@ class Character:
         # Draw the laser if active, passing the camera and enemy_squares
         self.movement.draw_laser(screen, camera, enemy_squares)
 
+        # Implement laser attack that uses self.damage_per_tick
+        self.handle_laser_damage(enemy_squares)
+
         # Draw the character's health and stamina bars
         self.draw_health_bar(screen)
         self.draw_stamina_bar(screen)
+        
+    def handle_laser_damage(self, enemy_squares):
+        """Handle applying damage to enemy squares when the laser is active."""
+        if self.laser_active:
+            # Iterate through the enemies and check for collisions with the laser
+            for enemy in enemy_squares:
+                if self.movement.laser_rect and self.movement.laser_rect.colliderect(enemy.rect):
+                    # Apply damage to the enemy
+                    if enemy.take_damage(self.damage_per_tick):  # Pass damage per tick
+                        print(f"Enemy took {self.damage_per_tick} damage! Current health: {enemy.health}")
+
 
     def draw_health_bar(self, screen):
         # Define health bar dimensions and position in the top left of the screen

@@ -2,7 +2,7 @@ import pygame
 import json
 import time
 import os
-from scripts.game import Game  # Import the Game class
+from scripts.game import Game
 
 class MainMenu:
     def __init__(self, screen):
@@ -18,7 +18,7 @@ class MainMenu:
             self.screen.fill((0, 0, 0))
 
             # Render button text
-            title = self.font.render('Simple Platformer', True, (255, 255, 255))
+            title = self.font.render("Shoot 'em dead", True, (255, 255, 255))
             new_game_text = self.font.render('New Game', True, (0, 0, 0))
             load_game_text = self.font.render('Load Game', True, (0, 0, 0))
 
@@ -45,24 +45,35 @@ class MainMenu:
         pygame.quit()
 
     def display_load_slots(self):
-        """Display the load game slots with the ability to delete saves."""
+        """Display the load game slots with the ability to delete saves using a trashcan button with a red border, 
+        and buttons to return to the main or pause menu."""
         running = True
         slot_height = 60
         delete_mode = False  # Toggle delete mode
 
+        # Load the trashcan image and scale it to an appropriate size
+        trashcan_image = pygame.image.load("assets/trashcan.png")
+        trashcan_image = pygame.transform.scale(trashcan_image, (40, 40))  # Set the size of the trashcan button
+
+        # Create buttons for returning to main menu and pause menu
+        return_main_menu_button = pygame.Rect(300, 500, 200, 50)
+        return_pause_menu_button = pygame.Rect(300, 560, 200, 50)
+
         while running:
             self.screen.fill((0, 0, 0))
 
-            # Render a delete button
-            delete_button_rect = pygame.Rect(550, 50, 100, 50)
-            delete_button_text = self.font.render('Delete', True, (255, 0, 0))
-            pygame.draw.rect(self.screen, (255, 255, 255), delete_button_rect)
-            self.screen.blit(delete_button_text, (delete_button_rect.x + 20, delete_button_rect.y + 10))
-
-            # Draw load game slots
+            # Draw load game slots with the trashcan button next to each
             for i, save_file in enumerate(self.save_slots):
                 slot_rect = pygame.Rect(300, 200 + i * slot_height, 200, 50)
                 pygame.draw.rect(self.screen, (255, 255, 255), slot_rect)
+
+                # Draw the trashcan button with a red border
+                trashcan_rect = pygame.Rect(510, 200 + i * slot_height + 5, 40, 40)
+                border_rect = pygame.Rect(508, 198 + i * slot_height + 5, 44, 44)  # Slightly larger rect for the border
+
+                # Draw the red border
+                pygame.draw.rect(self.screen, (255, 0, 0), border_rect, 2)  # Red border with thickness 2
+                self.screen.blit(trashcan_image, trashcan_rect)  # Draw the trashcan image inside the border
 
                 # Check if save file exists and render appropriate text
                 if os.path.exists(save_file):
@@ -75,6 +86,17 @@ class MainMenu:
 
                 self.screen.blit(slot_text, (slot_rect.x + 20, slot_rect.y + 10))
 
+            # Draw the buttons for returning to the Main Menu and Pause Menu
+            pygame.draw.rect(self.screen, (255, 255, 255), return_main_menu_button)
+            pygame.draw.rect(self.screen, (255, 255, 255), return_pause_menu_button)
+
+            # Render button text
+            main_menu_text = self.font.render('Return to Main Menu', True, (0, 0, 0))
+            pause_menu_text = self.font.render('Return to Pause Menu', True, (0, 0, 0))
+
+            self.screen.blit(main_menu_text, (return_main_menu_button.x + 20, return_main_menu_button.y + 10))
+            self.screen.blit(pause_menu_text, (return_pause_menu_button.x + 20, return_pause_menu_button.y + 10))
+
             pygame.display.flip()
 
             for event in pygame.event.get():
@@ -83,21 +105,29 @@ class MainMenu:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     mouse_pos = pygame.mouse.get_pos()
 
-                    # Check if the delete button is clicked
-                    if delete_button_rect.collidepoint(mouse_pos):
-                        delete_mode = not delete_mode  # Toggle delete mode
+                    # Check if any trashcan button is clicked
+                    for i, save_file in enumerate(self.save_slots):
+                        trashcan_rect = pygame.Rect(510, 200 + i * slot_height + 5, 40, 40)
+                        if trashcan_rect.collidepoint(mouse_pos) and os.path.exists(save_file):
+                            # Delete the save file
+                            os.remove(save_file)
+                            print(f'Save Slot {i+1} deleted.')
 
-                    # Check if any save slot is clicked
+                    # Check if any save slot is clicked (for loading)
                     for i, save_file in enumerate(self.save_slots):
                         slot_rect = pygame.Rect(300, 200 + i * slot_height, 200, 50)
-                        if slot_rect.collidepoint(mouse_pos):
-                            if delete_mode and os.path.exists(save_file):
-                                # Delete the save file
-                                os.remove(save_file)
-                                print(f'Save Slot {i+1} deleted.')
-                            elif not delete_mode and os.path.exists(save_file):
-                                # Load the game if not in delete mode
-                                self.load_game(save_file)
+                        if slot_rect.collidepoint(mouse_pos) and os.path.exists(save_file):
+                            # Load the game if the slot is clicked
+                            self.load_game(save_file)
+
+                    # Check if the "Return to Main Menu" button is clicked
+                    if return_main_menu_button.collidepoint(mouse_pos):
+                        from main import main
+                        main()  # Call the main menu function
+
+                    # Check if the "Return to Pause Menu" button is clicked
+                    if return_pause_menu_button.collidepoint(mouse_pos):
+                        running = False  # Close the load game window and return to pause menu
 
     def load_game(self, save_file):
         """Load the selected save game and return the saved data."""
@@ -139,7 +169,12 @@ class PauseMenu:
                     running = False
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     mouse_pos = pygame.mouse.get_pos()
-
+                    
+                    # Resume game logic
+                    if 300 <= mouse_pos[0] <= 500 and 200 <= mouse_pos[1] <= 230:
+                        # Resume the game
+                        running = False  # Exit the pause menu loop
+                        self.game.is_paused = False
                     if 300 <= mouse_pos[0] <= 500 and 250 <= mouse_pos[1] <= 280:
                         self.save_game_prompt()
                     if 300 <= mouse_pos[0] <= 500 and 350 <= mouse_pos[1] <= 380:
@@ -152,11 +187,12 @@ class PauseMenu:
                 self.game.play()
 
     def save_game_prompt(self):
-        """Prompt the player to select a slot and enter a name for the save."""
+        """Prompt the player to select a slot and enter a name for the save, with overwrite confirmation."""
         running = True
         slot_height = 60
         save_name = ''  # Store the save name
         selected_slot = None
+        overwrite_confirm = False  # Track if we are confirming overwrite
 
         while running:
             self.screen.fill((0, 0, 0))
@@ -181,10 +217,16 @@ class PauseMenu:
                 if selected_slot == i:
                     pygame.draw.rect(self.screen, (0, 255, 0), slot_rect, 3)
 
-            # Input prompt for save name
-            if selected_slot is not None and not os.path.exists(self.save_slots[selected_slot]):
+            # Input prompt for save name and overwrite confirmation
+            if selected_slot is not None:
+                # Show the "Enter save name" prompt regardless of whether it's an old save or empty
                 prompt_text = self.font.render('Enter save name: ' + save_name, True, (255, 255, 255))
                 self.screen.blit(prompt_text, (300, 150))
+
+                if os.path.exists(self.save_slots[selected_slot]):
+                    # Overwrite confirmation if the slot already contains a save
+                    overwrite_text = self.font.render(f"Overwrite save in Slot {selected_slot+1}?", True, (255, 255, 255))
+                    self.screen.blit(overwrite_text, (300, 100))
 
             # Save button
             save_button_rect = pygame.Rect(350, 450, 100, 50)
@@ -202,43 +244,83 @@ class PauseMenu:
 
                     # Check if the save button is clicked
                     if save_button_rect.collidepoint(mouse_pos) and selected_slot is not None and save_name:
-                        self.save_game(selected_slot, save_name)
-                        running = False
+                        if not os.path.exists(self.save_slots[selected_slot]):
+                            # Save directly if the slot is empty
+                            self.save_game(selected_slot, save_name)
+                            running = False
+                        elif overwrite_confirm:
+                            # Save after confirming overwrite
+                            self.save_game(selected_slot, save_name)
+                            running = False
 
                     # Check if any slot is clicked
                     for i, save_file in enumerate(self.save_slots):
                         slot_rect = pygame.Rect(300, 200 + i * slot_height, 200, 50)
-                        if slot_rect.collidepoint(mouse_pos) and not os.path.exists(save_file):
+                        if slot_rect.collidepoint(mouse_pos):
                             selected_slot = i  # Select the slot
+                            overwrite_confirm = os.path.exists(self.save_slots[selected_slot])  # Set overwrite confirmation
 
-                # Handle keyboard input for typing save name
+                # Handle keyboard input for typing save name or confirming overwrite
                 if selected_slot is not None:
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_BACKSPACE:
                             save_name = save_name[:-1]  # Remove the last character
                         elif event.key == pygame.K_RETURN:
-                            # Press Enter to confirm the save
+                            if overwrite_confirm:
+                                # Confirm overwrite if slot exists
+                                self.save_game(selected_slot, save_name)
+                                running = False
+                            elif save_name:
+                                # Save normally if no overwrite
+                                self.save_game(selected_slot, save_name)
+                                running = False
+                        elif event.key == pygame.K_y and overwrite_confirm:
+                            # Yes to overwrite
                             self.save_game(selected_slot, save_name)
                             running = False
+                        elif event.key == pygame.K_n and overwrite_confirm:
+                            # No to overwrite, go back to selection
+                            overwrite_confirm = False
                         else:
-                            save_name += event.unicode  # Add typed character
+                            # Add typed character for save name
+                            save_name += event.unicode
 
-        if not running:
-            return
+            if not running:
+                return
+
+
 
     def save_game(self, slot_index, save_name):
         """Save the game to the selected slot."""
         save_file = self.save_slots[slot_index]
+
+        # Prepare enemy square data to save
+        enemy_data = [{
+            'x': enemy.rect.x,
+            'y': enemy.rect.y,
+            'health': enemy.health
+        } for enemy in self.game.enemy_squares]  # Collect enemy square data
+
+        # Check if enemy_data has been properly collected
+        print(f"Enemy data collected for saving: {enemy_data}")
+
+        # Prepare the game data to save, including enemies
         self.game_data = {
             'save_name': save_name,
             'player_x': self.game.player.rect.x,
             'player_y': self.game.player.rect.y,
             'level': self.game.game_data['level'],
-            'player_health': self.game.player.health
+            'player_health': self.game.player.health,
+            'enemy_squares': enemy_data  # Save enemy square data
         }
+        
+        # Write the game data to the save file
         with open(save_file, 'w') as f:
             json.dump(self.game_data, f)
-        print(f"Game saved in Slot {slot_index + 1} as '{save_name}'")
+        
+        num_enemies = len(self.game.enemy_squares)
+        print(f"Game saved in Slot {slot_index + 1} as '{save_name}' with {num_enemies} enemies.")
+
 
 class GameOverScreen:
     def __init__(self, screen):

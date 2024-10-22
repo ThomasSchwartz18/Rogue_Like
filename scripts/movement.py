@@ -18,7 +18,7 @@ class Movement:
         self.laser_active = False  # Whether the laser is active
         self.laser_end = None  # Current or last mouse position for the laser
         self.laser_color = (255, 0, 0)  # Red laser color
-        self.laser_damage = 5  # Amount of damage dealt by the laser per frame
+        self.laser_damage = 25  # Amount of damage dealt by the laser per frame
 
     def handle_keys(self, character):
         keys = pygame.key.get_pressed()
