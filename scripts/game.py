@@ -1,9 +1,9 @@
-# scripts/game.py
 import pygame
 from scripts.character import Character
 from scripts.ground import Ground
 from scripts.camera import Camera
 from scripts.background import Background
+from scripts.box import Box  # Import the Box class
 
 class Game:
     def __init__(self, screen):
@@ -14,9 +14,10 @@ class Game:
         # Initialize background to stretch over the entire map
         self.background = Background(self.map_width, self.map_height)
 
-        # Initialize character, ground, and camera
+        # Initialize character, ground, camera, and box
         self.character = Character(screen.get_width(), screen.get_height())
         self.ground = Ground(0, 500, self.map_width, 100)
+        self.box = Box(300, 500, 500)  # Set the box at position (300, ground level 500)
         self.camera = Camera(screen.get_width(), screen.get_height(), self.map_width, self.map_height)
 
     def update(self):
@@ -33,10 +34,14 @@ class Game:
         # Draw the background and move it based on the camera's x-offset
         self.background.draw(self.screen, self.camera.offset_x, time)
 
-        # Draw the ground and character with the camera offset applied
+        # Draw the ground, box, and character with the camera offset applied
         self.screen.blit(self.ground.image, self.camera.apply(self.ground))
+        self.screen.blit(self.box.image, self.camera.apply(self.box))  # Draw the box
         self.screen.blit(self.character.image, self.camera.apply(self.character))
 
     def check_collisions(self):
+        # Check if the character collides with the ground or the box
         if pygame.sprite.collide_rect(self.character, self.ground):
             self.character.land_on_ground(self.ground.rect.top)
+        elif pygame.sprite.collide_rect(self.character, self.box):
+            self.character.land_on_ground(self.box.rect.top)
