@@ -68,6 +68,14 @@ class Character(pygame.sprite.Sprite):
                 run_images.append(img)
         return run_images
 
+    def play_run_animation(self):
+        """ Play the running animation when moving and on the ground. """
+        current_time = pygame.time.get_ticks()
+        if current_time - self.run_frame_time > self.run_frame_duration:
+            self.run_frame_time = current_time
+            self.run_frame = (self.run_frame + 1) % len(self.run_images)  # Loop over run frames
+            self.image = self.mirror_image(self.run_images[self.run_frame])  # Mirror the run image
+            
     def update(self):
         keys = pygame.key.get_pressed()
 
@@ -76,10 +84,14 @@ class Character(pygame.sprite.Sprite):
         if keys[pygame.K_a]:
             self.rect.x -= 5
             self.facing_left = True  # Set facing direction to left
+            if self.on_ground == True:
+                self.play_run_animation()
             moving = True
         elif keys[pygame.K_d]:
             self.rect.x += 5
             self.facing_left = False  # Set facing direction to right
+            if self.on_ground == True:
+                self.play_run_animation()
             moving = True
 
         # Allow jump only if the spacebar was released after the last jump
@@ -125,13 +137,6 @@ class Character(pygame.sprite.Sprite):
             self.idle_frame = (self.idle_frame + 1) % len(self.idle_images)  # Loop over frames
             self.image = self.mirror_image(self.idle_images[self.idle_frame])  # Mirror the idle image
 
-    def play_run_animation(self):
-        """ Play the running animation when moving and on the ground. """
-        current_time = pygame.time.get_ticks()
-        if current_time - self.run_frame_time > self.run_frame_duration:
-            self.run_frame_time = current_time
-            self.run_frame = (self.run_frame + 1) % len(self.run_images)  # Loop over run frames
-            self.image = self.mirror_image(self.run_images[self.run_frame])  # Mirror the run image
 
     def play_jump_animation(self):
         """ Play the jump animation, and show jump4-up or jump4-down based on vertical velocity. """
