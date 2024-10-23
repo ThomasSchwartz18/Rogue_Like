@@ -1,154 +1,167 @@
 import pygame
-from scripts.movement import Movement
+import os
 
-class Character:
-    def __init__(self, x, y, map_width, map_height):
-        self.radius = 25  # Radius of the character circle
-        self.rect = pygame.Rect(x - self.radius, y - self.radius, self.radius * 2, self.radius * 2)  # Position and size
-        self.color = (255, 255, 255)  # Character's color (white)
-        self.outline_color = (0, 0, 0)  # Black outline color
-        self.outline_thickness = 3  # Thickness for the outline
-        self.movement = Movement(self.rect, map_width, map_height)  # Pass map dimensions to Movement
+class Character(pygame.sprite.Sprite):
+    def __init__(self, screen_width, screen_height):
+        super().__init__()
+        # Load idle, jump, and run animations
+        self.idle_images = self.load_idle_animation()  
+        self.jump_images = self.load_jump_animation()  # Load jump animation frames
+        self.run_images = self.load_run_animation()    # Load run animation frames
+        self.image = self.idle_images[0]  # Start with the first idle frame
+        self.rect = self.image.get_rect()
 
-        self.speed = 5  # Movement speed (upgradable)
-        self.damage_per_tick = 25  # Laser damage (upgradable)
-        self.dash_distance = 100  # Dash distance (upgradable)
-        
-        # Character's health
-        self.health = 100
-        self.max_health = 100
-        
-        # Stamina attributes
-        self.max_stamina = 3  # Max stamina sections (3)
-        self.stamina = self.max_stamina  # Current stamina
-        self.stamina_recharge_rate = 120  # Frames it takes to recharge one section (2 seconds at 60 FPS)
-        self.stamina_recharge_timer = 0  # Timer to track recharge
+        # Place the character initially in the center of the screen
+        self.rect.x = screen_width // 2 - self.rect.width // 2
+        self.rect.y = screen_height // 2 - self.rect.height // 2
 
-        # Damage cooldown
-        self.laser_active = False  # Whether the laser is being fired
-        self.laser_cooldown = 0  # Cooldown for laser damage
-        self.damage_cooldown = 0  # Cooldown timer for taking damage
+        self.velocity_y = 0
+        self.jump_strength = -15
+        self.gravity = 1
+        self.on_ground = True  # Start on the ground
 
-    def upgrade_speed(self, amount):
-        """Upgrade character's movement speed."""
-        self.speed += amount
-        print(f"Speed upgraded! New speed: {self.speed}")
+        # Animation control variables
+        self.idle_frame = 0
+        self.run_frame = 0
+        self.idle_frame_time = 0
+        self.run_frame_time = 0
+        self.idle_frame_duration = 300  # Milliseconds per frame for idle animation
+        self.run_frame_duration = 150   # Faster animation for running
+        self.jump_frame = 0
+        self.is_jumping = False  # Track if the character is in a jump state
+        self.facing_left = False  # Track if the character is facing left
 
-    def upgrade_damage(self, amount):
-        """Upgrade character's damage per tick."""
-        self.damage_per_tick += amount
-        print(f"Damage upgraded! New damage: {self.damage_per_tick}")
+        # Track spacebar release
+        self.space_released = True  # Initially set to True, so the player can jump
 
-    def upgrade_dash_distance(self, amount):
-        """Upgrade character's dash distance."""
-        self.dash_distance += amount
-        print(f"Dash distance upgraded! New dash distance: {self.dash_distance}")
+        # Load jump4-up and jump4-down images for handling up/down motion
+        self.jump4_up = pygame.image.load("assets/jump/jump4-up.png").convert_alpha()
+        self.jump4_down = pygame.image.load("assets/jump/jump4-down.png").convert_alpha()
+
+    def load_idle_animation(self):
+        # Load all images from the 'assets/idleanimation' folder
+        idle_images = []
+        idle_folder = "assets/idleanimation"
+        for filename in os.listdir(idle_folder):
+            if filename.endswith(".png"):
+                img = pygame.image.load(os.path.join(idle_folder, filename)).convert_alpha()
+                idle_images.append(img)
+        return idle_images
+
+    def load_jump_animation(self):
+        # Load all images from the 'assets/jump' folder except jump4-up and jump4-down
+        jump_images = []
+        jump_folder = "assets/jump"
+        for filename in sorted(os.listdir(jump_folder)):
+            if filename.endswith(".png") and "jump4" not in filename:  # Skip jump4-up and jump4-down
+                img = pygame.image.load(os.path.join(jump_folder, filename)).convert_alpha()
+                jump_images.append(img)
+        return jump_images
+
+    def load_run_animation(self):
+        # Load both images from the 'assets/run' folder
+        run_images = []
+        run_folder = "assets/run"
+        for filename in os.listdir(run_folder):
+            if filename.endswith(".png"):
+                img = pygame.image.load(os.path.join(run_folder, filename)).convert_alpha()
+                run_images.append(img)
+        return run_images
 
     def update(self):
-        self.movement.handle_keys(self)  # Pass the character instance to handle_keys()
-        self.movement.apply_dash()  # Apply dash logic if active
+        keys = pygame.key.get_pressed()
 
-        # Reduce the damage cooldown timer
-        if self.damage_cooldown > 0:
-            self.damage_cooldown -= 1
+        # Handle movement with A/D keys and mirror the image
+        moving = False
+        if keys[pygame.K_a]:
+            self.rect.x -= 5
+            self.facing_left = True  # Set facing direction to left
+            moving = True
+        elif keys[pygame.K_d]:
+            self.rect.x += 5
+            self.facing_left = False  # Set facing direction to right
+            moving = True
 
-        # Recharge stamina
-        self.recharge_stamina()
+        # Allow jump only if the spacebar was released after the last jump
+        if keys[pygame.K_SPACE] and self.on_ground and self.space_released:
+            self.velocity_y = self.jump_strength
+            self.on_ground = False
+            self.is_jumping = True  # Trigger jumping animation
+            self.space_released = False  # Block jumping until space is released
 
-    def dash(self):
-        """Handle stamina usage for dashing."""
-        if self.stamina > 0:  # Can dash only if stamina is available
-            self.stamina -= 1  # Use one stamina section
-            print(f"Character dashed! Remaining stamina: {self.stamina}")
-            # Apply dash movement logic here
-            return True
+        # Check if the spacebar has been released
+        if not keys[pygame.K_SPACE]:
+            self.space_released = True  # Allow jump when space is released
+
+        # Apply gravity
+        self.velocity_y += self.gravity
+        self.rect.y += self.velocity_y
+
+        # Check if the character is on the ground
+        if self.rect.bottom >= 600:  # Assuming 600 is the bottom of the screen
+            self.rect.bottom = 600
+            if self.is_jumping:
+                self.play_landing_animation()  # Handle landing
+            self.on_ground = True
+            self.is_jumping = False
         else:
-            print("No stamina left to dash!")
-            return False
+            self.on_ground = False  # The character is in the air
 
-    def recharge_stamina(self):
-        """Recharge stamina over time."""
-        if self.stamina < self.max_stamina:
-            self.stamina_recharge_timer += 1
-            if self.stamina_recharge_timer >= self.stamina_recharge_rate:
-                self.stamina += 1  # Recharge one section of stamina
-                self.stamina_recharge_timer = 0  # Reset timer
-                print(f"Stamina recharged: {self.stamina}/{self.max_stamina}")
+        # Handle animations based on state
+        if self.is_jumping:
+            self.play_jump_animation()
+        elif moving and self.on_ground:
+            # Prioritize running animation if moving and on the ground
+            self.play_run_animation()  # Call run animation here when moving on the ground
+        else:
+            # Only play idle animation if the player is not moving and not jumping
+            self.play_idle_animation()
 
-    def take_damage(self, damage):
-        if self.damage_cooldown <= 0:
-            self.health -= damage
-            print(f"Character took {damage} damage! Current health: {self.health}")
-            self.damage_cooldown = 60  # Set cooldown to 1 second at 60 FPS
+    def play_idle_animation(self):
+        """ Play the idle animation and mirror based on direction. """
+        current_time = pygame.time.get_ticks()
+        if current_time - self.idle_frame_time > self.idle_frame_duration:
+            self.idle_frame_time = current_time
+            self.idle_frame = (self.idle_frame + 1) % len(self.idle_images)  # Loop over frames
+            self.image = self.mirror_image(self.idle_images[self.idle_frame])  # Mirror the idle image
 
-    def draw(self, screen, position, camera, enemy_squares):
-        # Draw the black outline first
-        pygame.draw.circle(screen, self.outline_color, position.center, self.radius + self.outline_thickness)
+    def play_run_animation(self):
+        """ Play the running animation when moving and on the ground. """
+        current_time = pygame.time.get_ticks()
+        if current_time - self.run_frame_time > self.run_frame_duration:
+            self.run_frame_time = current_time
+            self.run_frame = (self.run_frame + 1) % len(self.run_images)  # Loop over run frames
+            self.image = self.mirror_image(self.run_images[self.run_frame])  # Mirror the run image
 
-        # Draw the player as a circle on top of the outline
-        pygame.draw.circle(screen, self.color, position.center, self.radius)
-
-        # Draw the laser if active, passing the camera and enemy_squares
-        self.movement.draw_laser(screen, camera, enemy_squares)
-
-        # Implement laser attack that uses self.damage_per_tick
-        self.handle_laser_damage(enemy_squares)
-
-        # Draw the character's health and stamina bars
-        self.draw_health_bar(screen)
-        self.draw_stamina_bar(screen)
-        
-    def handle_laser_damage(self, enemy_squares):
-        """Handle applying damage to enemy squares when the laser is active."""
-        if self.laser_active:
-            # Iterate through the enemies and check for collisions with the laser
-            for enemy in enemy_squares:
-                if self.movement.laser_rect and self.movement.laser_rect.colliderect(enemy.rect):
-                    # Apply damage to the enemy
-                    if enemy.take_damage(self.damage_per_tick):  # Pass damage per tick
-                        print(f"Enemy took {self.damage_per_tick} damage! Current health: {enemy.health}")
-
-
-    def draw_health_bar(self, screen):
-        # Define health bar dimensions and position in the top left of the screen
-        health_bar_width = 200
-        health_bar_height = 20
-        health_bar_x = 20  # Distance from the left of the screen
-        health_bar_y = 20  # Distance from the top of the screen
-
-        # Calculate current health bar width based on the character's current health
-        current_health_width = int(health_bar_width * (self.health / self.max_health))
-
-        # Draw the health bar background (red)
-        pygame.draw.rect(screen, (255, 0, 0), (health_bar_x, health_bar_y, health_bar_width, health_bar_height))
-
-        # Draw the current health (green)
-        pygame.draw.rect(screen, (0, 255, 0), (health_bar_x, health_bar_y, current_health_width, health_bar_height))
-
-        # Optionally, draw a border around the health bar
-        pygame.draw.rect(screen, (0, 0, 0), (health_bar_x, health_bar_y, health_bar_width, health_bar_height), 2)  # Black border
-
-    def draw_stamina_bar(self, screen):
-        # Stamina bar below the health bar
-        stamina_bar_width = 200
-        stamina_bar_height = 10
-        stamina_bar_x = 20
-        stamina_bar_y = 50  # Below the health bar
-
-        # Dark green color for the stamina bar
-        dark_green = (0, 100, 0)
-
-        # Calculate width of each stamina section
-        section_width = stamina_bar_width // self.max_stamina
-
-        # Draw each section of the stamina bar
-        for i in range(self.max_stamina):
-            if i < self.stamina:
-                # Filled section (dark green)
-                pygame.draw.rect(screen, dark_green, (stamina_bar_x + i * section_width, stamina_bar_y, section_width, stamina_bar_height))
+    def play_jump_animation(self):
+        """ Play the jump animation, and show jump4-up or jump4-down based on vertical velocity. """
+        if self.jump_frame < len(self.jump_images) - 1:
+            # Loop through jump animation frames until jump4
+            self.image = self.mirror_image(self.jump_images[self.jump_frame])
+            self.jump_frame += 1
+        else:
+            # Show jump4-up if moving upward, jump4-down if falling
+            if self.velocity_y < 0:
+                self.image = self.mirror_image(self.jump4_up)
             else:
-                # Empty section (red)
-                pygame.draw.rect(screen, (255, 0, 0), (stamina_bar_x + i * section_width, stamina_bar_y, section_width, stamina_bar_height))
+                self.image = self.mirror_image(self.jump4_down)
 
-        # Optionally, draw a border around the stamina bar
-        pygame.draw.rect(screen, (0, 0, 0), (stamina_bar_x, stamina_bar_y, stamina_bar_width, stamina_bar_height), 2)  # Black border
+    def play_landing_animation(self):
+        """ Play landing animation once the character hits the ground. """
+        self.image = self.mirror_image(self.jump_images[-2])  # Play jump3.png on landing
+        self.jump_frame = 0  # Reset the jump frame for the next jump
+
+    def mirror_image(self, image):
+        """ Mirror the image based on the direction the character is facing. """
+        if self.facing_left:
+            return pygame.transform.flip(image, True, False)  # Flip horizontally if facing left
+        return image  # Return the normal image if facing right
+
+    def draw(self, screen):
+        screen.blit(self.image, self.rect)
+
+    def land_on_ground(self, ground_top):
+        self.rect.bottom = ground_top
+        self.velocity_y = 0
+        self.on_ground = True
+        self.is_jumping = False
