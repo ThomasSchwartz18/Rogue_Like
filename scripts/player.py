@@ -23,10 +23,14 @@ class Player:
             'take_hit': self.load_images('../assets/images/PNG/take_hit'),
             'sp_atk': self.load_images('../assets/images/PNG/sp_atk'),
             'death': self.load_images('../assets/images/PNG/death'),
+            'arrow_shower_effect': self.load_images('../assets/images/PNG/projectiles_and_effects/arrow_shower_effect'),
             # Add more animations as needed
         }
 
         self.index = 0  # To track the current frame in the animation
+        
+        self.arrow_effect_index = 0  # Separate index for the arrow shower effect
+        
         self.current_animation = 'idle'  # Default to the idle animation
         self.image = self.animations[self.current_animation][self.index]
             # Set the dimensions of the smaller hitbox (adjust 30, 40 as needed)
@@ -50,6 +54,11 @@ class Player:
         self.is_falling = False  # Tracks if the player is falling (for jump_down animation)
         self.is_attacking = False  # Track if the player is attacking
         self.facing_right = True  # True if the player is facing right
+        
+        self.is_freeze_for_click = False  # New flag to freeze at halfway point
+        self.attack_halfway_reached = False  # Tracks if halfway point is reached
+        self.arrow_shower_active = False  # Flag for arrow shower animation
+        self.arrow_shower_pos = None  # Store position of the mouse click for the effect
 
         # Initialize projectiles and attack damage
         self.projectiles = []  # List to track active projectiles
@@ -73,72 +82,148 @@ class Player:
                 images.append(pygame.image.load(img_path))
         return images
 
-    def update(self, ground):
+    def update(self, ground, screen):
         keys = pygame.key.get_pressed()
-        self.is_moving = False  # Assume player is idle unless a movement key is pressed
+        self.is_moving = False
 
         # Horizontal movement
-        if not self.is_attacking:  # Prevent movement while attacking
+        if not self.is_attacking and not self.is_freeze_for_click:
             if keys[pygame.K_a]:
                 self.rect.x -= self.speed_x
-                self.facing_right = False  # Player is facing left
+                self.facing_right = False
                 self.is_moving = True
                 if not self.is_jumping and not self.is_falling:
-                    self.change_animation('run')  # Only run when not jumping
+                    self.change_animation('run')
 
             elif keys[pygame.K_d]:
                 self.rect.x += self.speed_x
-                self.facing_right = True  # Player is facing right
+                self.facing_right = True
                 self.is_moving = True
                 if not self.is_jumping and not self.is_falling:
-                    self.change_animation('run')  # Only run when not jumping
+                    self.change_animation('run')
 
         # Apply gravity
         self.speed_y += self.gravity
         self.rect.y += self.speed_y
 
-        # Check if player is falling (after reaching the peak of the jump)
+        # Check if the player is falling
         if self.speed_y > 0 and self.is_jumping:
             self.is_falling = True
-            self.change_animation('jump_down')  # Switch to jump_down animation
+            self.change_animation('jump_down')
 
         # Ground collision
         if self.rect.colliderect(ground):
-            self.rect.y = ground.top - self.rect.height  # Place the player on top of the ground
+            self.rect.y = ground.top - self.rect.height
             self.speed_y = 0
             self.is_jumping = False
-            self.is_falling = False  # Reset falling state when on the ground
-            if not self.is_moving and not self.is_attacking:
+            self.is_falling = False
+            if not self.is_moving and not self.is_attacking and not self.is_freeze_for_click:
                 self.change_animation('idle')
 
         # Jumping
-        if not self.is_attacking:  # Prevent jumping while attacking
+        if not self.is_attacking and not self.is_freeze_for_click:
             if keys[pygame.K_SPACE] and not self.is_jumping and not self.is_falling:
                 self.is_jumping = True
                 self.speed_y = self.jump_strength
-                self.change_animation('jump_up')  # Switch to jump up animation
+                self.change_animation('jump_up')
 
-        # Attacking with E key (playing the 1_atk animation)
-        if keys[pygame.K_e] and not self.is_attacking:  # Start attack only if not already attacking
+        # Attacks
+        if keys[pygame.K_e] and not self.is_attacking and not self.is_freeze_for_click:
             self.is_attacking = True
-            self.change_animation('1_atk')  # Play 1_atk animation when E is pressed
+            self.change_animation('1_atk')
 
-        # Attacking with Q key (playing the 2_atk animation)
-        if keys[pygame.K_q] and not self.is_attacking:  # Start 2_atk only if not already attacking
+        if keys[pygame.K_q] and not self.is_attacking and not self.is_freeze_for_click:
             self.is_attacking = True
-            self.change_animation('2_atk')  # Play 2_atk animation when Q is pressed
-            self.fire_projectile()  # Fire the first arrow
-            self.attack_start_time = pygame.time.get_ticks()  # Record the time the attack starts
-                        
+            self.change_animation('2_atk')
+            self.fire_projectile()
+            self.attack_start_time = pygame.time.get_ticks()
+
+        if keys[pygame.K_c] and not self.is_attacking and not self.is_freeze_for_click:
+            self.is_attacking = True
+            self.change_animation('3_atk')
+
+        # Arrow shower trigger
+        if self.is_freeze_for_click:
+            if pygame.mouse.get_pressed()[0]:
+                self.arrow_shower_pos = pygame.mouse.get_pos()
+                self.arrow_shower_active = True
+                self.is_freeze_for_click = False
+
         # Update projectiles
         for projectile in self.projectiles:
             projectile.update()
 
         # If not moving, attacking, or performing other actions, switch to idle
-        if not self.is_moving and not self.is_attacking and not self.is_jumping and not self.is_falling:
+        if not self.is_moving and not self.is_attacking and not self.is_jumping and not self.is_falling and not self.is_freeze_for_click:
             self.change_animation('idle')
 
+        # Animate player
         self.animate()
+
+        # Play arrow shower effect
+        if self.arrow_shower_active:
+            self.play_arrow_shower_effect(screen)
+
+    def animate(self):
+        """Handle the animation updates and freezing logic."""
+        if self.is_freeze_for_click:
+            return
+
+        self.animation_counter += 1
+        if self.animation_counter >= self.animation_delay:
+            self.index = (self.index + 1) % len(self.animations[self.current_animation])
+            self.animation_counter = 0
+
+            # Check halfway point in 3_atk animation
+            if self.current_animation == '3_atk' and not self.attack_halfway_reached:
+                halfway_frame = len(self.animations['3_atk']) // 2
+                if self.index == halfway_frame:
+                    self.is_freeze_for_click = True
+                    self.attack_halfway_reached = True
+                    return
+
+            # Fire the second arrow during the 2_atk animation after a delay
+            if self.current_animation == '2_atk':
+                elapsed_time = pygame.time.get_ticks() - self.attack_start_time  # Calculate time since attack started
+                
+                if elapsed_time > 1490 and not self.second_arrow_fired:  # Fire after 500ms (adjust as needed)
+                    self.fire_projectile()  # Fire the second arrow
+                    self.second_arrow_fired = True  # Make sure this only happens once
+
+            # Reset attacking state when the attack animation completes
+            if self.current_animation == '1_atk' and self.index == 0:  # Attack animation complete
+                self.is_attacking = False
+                self.change_animation('idle')
+
+            if self.current_animation == '2_atk' and self.index == 0:  # Add logic for 2_atk attack reset
+                self.is_attacking = False
+                self.second_arrow_fired = False  # Reset for the next attack
+                self.change_animation('idle')
+
+            if self.current_animation == '3_atk' and self.index == 0 and not self.is_freeze_for_click:
+                self.is_attacking = False
+                self.attack_halfway_reached = False
+
+        # Update the image based on the direction the player is facing
+        if self.facing_right:
+            self.image = self.animations[self.current_animation][self.index]
+        else:
+            self.image = pygame.transform.flip(self.animations[self.current_animation][self.index], True, False)
+            
+    def play_arrow_shower_effect(self, screen):
+        """Play the arrow shower effect at the clicked position."""
+        if self.arrow_shower_pos:
+            arrow_shower_animation = self.animations['arrow_shower_effect']
+
+            # Ensure the animation loops over its frames
+            frame = arrow_shower_animation[self.arrow_effect_index]
+            screen.blit(frame, self.arrow_shower_pos)
+
+            # Progress the effect frame by frame
+            self.arrow_effect_index += 1
+            if self.arrow_effect_index >= len(arrow_shower_animation):
+                self.arrow_effect_index = 0
+                self.arrow_shower_active = False  # End the arrow shower effect
 
     def fire_projectile(self):
         """Fire an arrow in the direction the player is facing."""
@@ -164,30 +249,6 @@ class Player:
             self.current_animation = animation_name
             self.index = 0  # Reset the animation index
 
-    def animate(self):
-        # Increment animation counter for a delay
-        self.animation_counter += 1
-        if self.animation_counter >= self.animation_delay:
-            self.index = (self.index + 1) % len(self.animations[self.current_animation])  # Loop through images
-            self.animation_counter = 0  # Reset counter
-
-            # Check if attack animation is complete
-            if self.current_animation == '1_atk' or self.current_animation == '2_atk':
-                if self.index == 0:
-                    self.is_attacking = False  # End attack when the animation completes
-            if self.current_animation == '2_atk':
-                elapsed_time = pygame.time.get_ticks() - self.attack_start_time  # Calculate time since attack started
-                
-                # Fire the second arrow after 300 milliseconds (adjust this value as needed)
-                if elapsed_time > 1250 and not self.second_arrow_fired:
-                    self.fire_projectile()  # Fire the second arrow
-                    self.second_arrow_fired = True  # Make sure this only happens once
-                
-                # End the attack animation
-                if self.index == 0:
-                    self.is_attacking = False
-                    self.second_arrow_fired = False  # Reset for the next attack
-
         # Update the image based on the direction the player is facing
         if self.facing_right:
             self.image = self.animations[self.current_animation][self.index]  # Normal direction
@@ -202,8 +263,8 @@ class Player:
         # Draw the player image
         screen.blit(self.image, (image_x, image_y))
 
-        # Draw the red outline around the player's hitbox (rect)
-        pygame.draw.rect(screen, (255, 0, 0), self.rect, 2)  # Red color with thickness of 2 pixels
+        # # Draw the red outline around the player's hitbox (rect)
+        # pygame.draw.rect(screen, (255, 0, 0), self.rect, 2)  # Red color with thickness of 2 pixels
 
         # Draw the projectiles
         for projectile in self.projectiles:

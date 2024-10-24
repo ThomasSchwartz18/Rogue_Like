@@ -76,7 +76,7 @@ while running:
     background.update()
 
     # Update the player with ground collision
-    player.update(background.ground)
+    player.update(background.ground, screen)
 
     # Draw everything
     screen.fill((255, 255, 255))  # Fill the screen with white (optional)
